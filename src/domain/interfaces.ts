@@ -90,7 +90,7 @@ export interface IChestService {
 }
 
 export interface IToolService {
-  equipBestPickaxe(): Promise<ItemSnapshot | null>;
+  equipBestPickaxe(destination?: "hand" | "off-hand"): Promise<ItemSnapshot | null>;
 }
 
 export interface IRepairService {

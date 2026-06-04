@@ -10,7 +10,7 @@ export class ToolService implements IToolService {
     private readonly logger: ILogger
   ) {}
 
-  async equipBestPickaxe(): Promise<ItemSnapshot | null> {
+  async equipBestPickaxe(destination: "hand" | "off-hand" = "hand"): Promise<ItemSnapshot | null> {
     const pickaxe = this.inventory.getBestPickaxe();
     if (!pickaxe) {
       this.logger.warn("No pickaxe found in inventory");
@@ -22,9 +22,9 @@ export class ToolService implements IToolService {
       return pickaxe;
     }
 
-    await this.bot.equip(item, "hand");
+    await this.bot.equip(item, destination);
     patchBotDigTime(this.bot);
-    this.logger.info("Equipped best pickaxe", { pickaxe: pickaxe.name });
+    this.logger.info("Equipped best pickaxe", { pickaxe: pickaxe.name, destination });
     return pickaxe;
   }
 

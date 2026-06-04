@@ -24,39 +24,48 @@ export class RepairService implements IRepairService {
     await this.telemetry.sendAlert("Repair dimulai", {
       durability: this.inventory.getPickaxeDurabilityPercent()
     });
-    await this.toolService.equipBestPickaxe();
+    await this.toolService.equipBestPickaxe("off-hand");
 
     let attempts = 0;
-    while ((this.inventory.getPickaxeDurabilityPercent() ?? 1) < this.thresholds.durabilityRepaired) {
-      const bottle = this.findXpBottle();
-      if (!bottle) {
-        const supplyChest = await this.chestService.findSupplyChest();
-        if (!supplyChest) {
-          await this.telemetry.sendAlert("XP Bottle habis");
-          this.logger.warn("Repair stopped because XP bottles are unavailable");
+    let repaired = false;
+
+    try {
+      while ((this.inventory.getPickaxeDurabilityPercent() ?? 1) < this.thresholds.durabilityRepaired) {
+        const bottle = this.findXpBottle();
+        if (!bottle) {
+          const supplyChest = await this.chestService.findSupplyChest();
+          if (!supplyChest) {
+            await this.telemetry.sendAlert("XP Bottle habis");
+            this.logger.warn("Repair stopped because XP bottles are unavailable");
+            return false;
+          }
+          await this.telemetry.sendAlert("XP Bottle habis", { supplyChest: supplyChest.id });
           return false;
         }
-        await this.telemetry.sendAlert("XP Bottle habis", { supplyChest: supplyChest.id });
-        return false;
+
+        await this.bot.equip(bottle, "hand");
+        await this.bot.look(this.bot.entity.yaw, -Math.PI / 2, true);
+        this.bot.activateItem();
+        await sleep(900);
+
+        attempts += 1;
+        if (attempts > 128) {
+          this.logger.warn("Repair attempt limit reached");
+          break;
+        }
       }
 
-      await this.bot.equip(bottle, "hand");
-      await this.bot.look(this.bot.entity.yaw, -Math.PI / 2, true);
-      this.bot.activateItem();
-      await sleep(900);
-
-      attempts += 1;
-      if (attempts > 128) {
-        this.logger.warn("Repair attempt limit reached");
-        break;
-      }
+      repaired = (this.inventory.getPickaxeDurabilityPercent() ?? 1) >= this.thresholds.durabilityRepaired;
+    } finally {
+      await this.toolService.equipBestPickaxe("hand");
     }
 
-    await this.toolService.equipBestPickaxe();
-    await this.telemetry.sendAlert("Repair selesai", {
-      durability: this.inventory.getPickaxeDurabilityPercent()
-    });
-    return true;
+    if (repaired) {
+      await this.telemetry.sendAlert("Repair selesai", {
+        durability: this.inventory.getPickaxeDurabilityPercent()
+      });
+    }
+    return repaired;
   }
 
   private findXpBottle(): any | null {
