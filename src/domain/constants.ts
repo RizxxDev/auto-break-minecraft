@@ -11,6 +11,8 @@ export const FOOD_PRIORITY = ["golden_carrot", "cooked_beef", "cooked_porkchop"]
 
 export const XP_BOTTLE_NAMES = ["experience_bottle", "experience_bottle_item"];
 
+export const TORCH_NAMES = ["torch", "soul_torch"];
+
 export const CHEST_BLOCK_NAMES = ["chest", "trapped_chest", "barrel"];
 
 export const STORAGE_ITEM_HINTS = [

@@ -139,6 +139,7 @@ export class QuarryRuntime {
       return;
     }
 
+    await this.services.food.eatIfNeeded();
     await this.services.tools.equipBestPickaxe();
     const target = await this.services.planner.getNextTarget(this.state, position, async (candidate, candidateState) =>
       this.services.safety.canMineTarget(candidate, candidateState, position)

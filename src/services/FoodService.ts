@@ -8,19 +8,28 @@ export class FoodService implements IFoodService {
   ) {}
 
   async eatIfNeeded(): Promise<boolean> {
-    if ((this.bot.food ?? 20) > 14) {
+    const hunger = this.bot.food ?? 20;
+    const health = this.bot.health ?? 20;
+    const shouldPanicEat = health < 20 && hunger < 20;
+    const shouldEatFromHunger = hunger <= 14;
+
+    if (!shouldPanicEat && !shouldEatFromHunger) {
       return false;
     }
 
     const food = this.findPreferredFood();
     if (!food) {
-      this.logger.warn("Hunger is low but no preferred food is available", { hunger: this.bot.food });
+      this.logger.warn("Food needed but no preferred food is available", { hunger, health });
       return false;
     }
 
     await this.bot.equip(food, "hand");
     await this.bot.consume();
-    this.logger.info("Ate food", { food: food.name, hunger: this.bot.food });
+    this.logger.info(shouldPanicEat ? "Panic ate food for health regeneration" : "Ate food", {
+      food: food.name,
+      hunger: this.bot.food,
+      health: this.bot.health
+    });
     return true;
   }
 

@@ -1,4 +1,4 @@
-import { PICKAXE_PRIORITY } from "../../domain/constants";
+import { PICKAXE_PRIORITY, TORCH_NAMES } from "../../domain/constants";
 import type { ILogger, IMovementService } from "../../domain/interfaces";
 import type { Vector3 } from "../../domain/types";
 import { getCarriedItems } from "../../services/InventoryService";
@@ -83,6 +83,9 @@ export class MineflayerMovementService implements IMovementService {
     await this.equipBestPickaxeForDig();
     patchBotDigTime(this.bot);
     await this.bot.dig(block);
+    if (block.name === "gravel") {
+      await this.tryTorchTrickForGravel(target);
+    }
     return true;
   }
 
@@ -189,6 +192,37 @@ export class MineflayerMovementService implements IMovementService {
     })[0];
   }
 
+  private async tryTorchTrickForGravel(target: Vector3): Promise<void> {
+    const torch = this.findTorch();
+    if (!torch) {
+      await sleep(randomInt(40, 120));
+      return;
+    }
+
+    const supportBlock = this.bot.blockAt(toVec3({ x: target.x, y: target.y - 1, z: target.z }));
+    if (!supportBlock || supportBlock.boundingBox !== "block") {
+      return;
+    }
+
+    try {
+      await sleep(randomInt(35, 95));
+      await this.bot.equip(torch, "hand");
+      await this.bot.placeBlock(supportBlock, toVec3({ x: 0, y: 1, z: 0 }));
+      this.logger.info("Used torch trick on gravel", { target });
+    } catch (error) {
+      this.logger.debug("Torch trick failed for gravel", {
+        target,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      await this.equipBestPickaxeForDig();
+    }
+  }
+
+  private findTorch(): any | null {
+    return getCarriedItems(this.bot).find((item: any) => TORCH_NAMES.includes(item.name)) ?? null;
+  }
+
   private canDigNow(block: any): boolean {
     if (typeof this.bot.canDigBlock === "function") {
       return this.bot.canDigBlock(block);
@@ -221,4 +255,8 @@ function toVec3(position: Vector3): any {
 function pickaxeScore(name: string): number {
   const priority = PICKAXE_PRIORITY.indexOf(name);
   return priority === -1 ? -1 : PICKAXE_PRIORITY.length - priority;
+}
+
+function randomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }

@@ -83,6 +83,47 @@ describe("MineflayerMovementService", () => {
     await expect(service.dig({ x: 30, y: 10, z: 30 })).resolves.toBe(false);
     expect(bot.dig).not.toHaveBeenCalled();
   });
+
+  it("uses a torch trick after breaking gravel and restores the pickaxe", async () => {
+    const actions: string[] = [];
+    const pickaxe = { name: "diamond_pickaxe", slot: 37, maxDurability: 1561, durabilityUsed: 10 };
+    const torch = { name: "torch", slot: 38 };
+    const supportBlock = { name: "stone", boundingBox: "block" };
+    const bot: any = {
+      heldItem: pickaxe,
+      entity: { position: { x: 0, y: 10, z: 0 } },
+      inventory: {
+        items: () => [pickaxe, torch]
+      },
+      pathfinder: {
+        setMovements: vi.fn(),
+        goto: vi.fn()
+      },
+      registry: { blocksByName: {}, blocksArray: [], itemsByName: {} },
+      blockAt: vi.fn((position: any) => {
+        if (position.y === 9) {
+          return supportBlock;
+        }
+        return { name: "gravel", diggable: true };
+      }),
+      canDigBlock: vi.fn(() => true),
+      equip: vi.fn(async (item: any) => {
+        actions.push(`equip:${item.name}`);
+        bot.heldItem = item;
+      }),
+      dig: vi.fn(async () => {
+        actions.push("dig:gravel");
+      }),
+      placeBlock: vi.fn(async () => {
+        actions.push(`place:${bot.heldItem.name}`);
+      })
+    };
+    const service = new MineflayerMovementService(bot, logger());
+
+    await expect(service.dig({ x: 0, y: 10, z: 0 })).resolves.toBe(true);
+
+    expect(actions).toEqual(["dig:gravel", "equip:torch", "place:torch", "equip:diamond_pickaxe"]);
+  });
 });
 
 function logger(): any {
