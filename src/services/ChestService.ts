@@ -74,7 +74,25 @@ export class ChestService implements IChestService {
 
   async findStorageChest(): Promise<ChestRecord | null> {
     const memory = await this.getMemory();
-    return this.findValid(memory.storageChests);
+    const knownStorage = await this.findValid(memory.storageChests);
+    if (knownStorage) {
+      return knownStorage;
+    }
+
+    await this.discoverChests();
+    const refreshedMemory = await this.getMemory();
+    const refreshedStorage = await this.findValid(refreshedMemory.storageChests);
+    if (refreshedStorage) {
+      return refreshedStorage;
+    }
+
+    const fallback = await this.findValid(refreshedMemory.unknownChests);
+    if (!fallback) {
+      return null;
+    }
+
+    await this.promoteToStorage(fallback);
+    return { ...fallback, kind: "STORAGE_CHEST" };
   }
 
   async markChestInvalid(chest: ChestRecord): Promise<void> {
@@ -93,6 +111,22 @@ export class ChestService implements IChestService {
       }
     }
     return null;
+  }
+
+  private async promoteToStorage(chest: ChestRecord): Promise<void> {
+    const memory = await this.getMemory();
+    memory.unknownChests = memory.unknownChests.filter((candidate) => candidate.id !== chest.id);
+    if (!memory.storageChests.some((candidate) => candidate.id === chest.id)) {
+      memory.storageChests.push({
+        ...chest,
+        kind: "STORAGE_CHEST",
+        lastSeenAt: new Date().toISOString()
+      });
+    }
+    await this.stateStore.saveChestMemory(memory);
+    await this.telemetry.sendAlert("Unknown chest dipakai sebagai storage", {
+      position: formatVector(chest.position)
+    });
   }
 
   private findChestPositions(): Vector3[] {

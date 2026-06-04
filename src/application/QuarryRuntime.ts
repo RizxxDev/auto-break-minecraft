@@ -133,7 +133,22 @@ export class QuarryRuntime {
       return;
     }
 
-    if (chosenTask === "WAIT_FOR_STORAGE" || chosenTask === "COMPLETE") {
+    if (chosenTask === "WAIT_FOR_STORAGE") {
+      const result = await this.services.storage.storeIfNeeded(this.state.lastWorkPosition);
+      if (result !== "NO_STORAGE") {
+        this.state = {
+          ...this.state,
+          currentTask: "QUARRY",
+          updatedAt: new Date().toISOString()
+        };
+        await this.saveState();
+      }
+      await this.sendStatusIfDue();
+      await sleep(1_000);
+      return;
+    }
+
+    if (chosenTask === "COMPLETE") {
       await this.sendStatusIfDue();
       await sleep(1_000);
       return;
