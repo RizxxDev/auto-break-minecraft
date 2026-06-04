@@ -81,8 +81,10 @@ export class MineflayerMovementService implements IMovementService {
     }
 
     await this.equipBestPickaxeForDig();
+    await this.smoothLookAtBlock(block, randomInt(3, 6));
+    await randomReactionTime(block.name === "gravel" ? 90 : 200, block.name === "gravel" ? 220 : 500);
     patchBotDigTime(this.bot);
-    await this.bot.dig(block);
+    await this.bot.dig(block, "ignore");
     if (block.name === "gravel") {
       await this.tryTorchTrickForGravel(target);
     }
@@ -115,9 +117,9 @@ export class MineflayerMovementService implements IMovementService {
     try {
       await this.bot.equip(scaffold, "hand");
       this.bot.setControlState?.("jump", true);
-      await sleep(250);
+      await randomReactionTime(200, 350);
       await this.bot.placeBlock(supportBlock, toVec3({ x: 0, y: 1, z: 0 }));
-      await sleep(200);
+      await randomReactionTime(150, 300);
       return true;
     } catch (error) {
       this.logger.warn("Failed to place scaffold block under feet", {
@@ -223,6 +225,32 @@ export class MineflayerMovementService implements IMovementService {
     return getCarriedItems(this.bot).find((item: any) => TORCH_NAMES.includes(item.name)) ?? null;
   }
 
+  private async smoothLookAtBlock(block: any, steps: number): Promise<void> {
+    if (typeof this.bot.look !== "function" || !this.bot.entity?.position || !block.position?.offset) {
+      return;
+    }
+
+    const target = block.position.offset(0.5, 0.5, 0.5);
+    const eye = this.bot.entity.position.offset?.(0, this.bot.entity.eyeHeight ?? 1.62, 0) ?? this.bot.entity.position;
+    const delta = target.minus ? target.minus(eye) : { x: target.x - eye.x, y: target.y - eye.y, z: target.z - eye.z };
+    const desiredYaw = Math.atan2(-delta.x, -delta.z);
+    const groundDistance = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+    const desiredPitch = Math.atan2(delta.y, groundDistance);
+    const startYaw = this.bot.entity.yaw ?? desiredYaw;
+    const startPitch = this.bot.entity.pitch ?? desiredPitch;
+    const frameDelay = Math.floor(randomInt(90, 180) / steps);
+
+    for (let step = 1; step <= steps; step += 1) {
+      const progress = easeInOut(step / steps);
+      const yaw = interpolateAngle(startYaw, desiredYaw, progress);
+      const pitch = startPitch + (desiredPitch - startPitch) * progress;
+      await this.bot.look(yaw, pitch, true);
+      if (step < steps) {
+        await sleep(frameDelay);
+      }
+    }
+  }
+
   private canDigNow(block: any): boolean {
     if (typeof this.bot.canDigBlock === "function") {
       return this.bot.canDigBlock(block);
@@ -259,4 +287,17 @@ function pickaxeScore(name: string): number {
 
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function randomReactionTime(min = 150, max = 400): Promise<void> {
+  return sleep(randomInt(min, max));
+}
+
+function easeInOut(t: number): number {
+  return t * t * (3 - 2 * t);
+}
+
+function interpolateAngle(start: number, end: number, t: number): number {
+  const difference = Math.atan2(Math.sin(end - start), Math.cos(end - start));
+  return start + difference * t;
 }

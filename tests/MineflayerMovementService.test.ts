@@ -14,7 +14,10 @@ describe("MineflayerMovementService", () => {
     const bot: any = {
       heldItem: stone,
       entity: {
-        position: { x: 0, y: 10, z: 0 }
+        position: vec(0, 10, 0),
+        eyeHeight: 1.62,
+        yaw: 0,
+        pitch: 0
       },
       inventory: {
         items: () => [stone, pickaxe]
@@ -44,14 +47,18 @@ describe("MineflayerMovementService", () => {
           cobblestone: { id: 10, name: "cobblestone" }
         }
       },
-      blockAt: vi.fn(() => ({ name: "stone", diggable: true })),
+      blockAt: vi.fn(() => ({ name: "stone", diggable: true, position: vec(1, 10, 0) })),
       canDigBlock: vi.fn(() => true),
+      look: vi.fn(async (yaw: number, pitch: number) => {
+        bot.entity.yaw = yaw;
+        bot.entity.pitch = pitch;
+      }),
       equip: vi.fn(async (item: any) => {
         actions.push(`equip:${item.name}`);
         bot.heldItem = item;
       }),
-      dig: vi.fn(async () => {
-        actions.push(`dig:${bot.heldItem.name}`);
+      dig: vi.fn(async (_block: any, forceLook: string) => {
+        actions.push(`dig:${bot.heldItem.name}:${forceLook}`);
       })
     };
 
@@ -59,13 +66,14 @@ describe("MineflayerMovementService", () => {
 
     await expect(service.dig({ x: 1, y: 10, z: 0 })).resolves.toBe(true);
 
-    expect(actions).toEqual(["equip:diamond_pickaxe", "dig:diamond_pickaxe"]);
+    expect(actions).toEqual(["equip:diamond_pickaxe", "dig:diamond_pickaxe:ignore"]);
+    expect(bot.look).toHaveBeenCalled();
   });
 
   it("returns false instead of throwing when pathfinder cannot reach a target", async () => {
     const bot: any = {
       heldItem: { name: "stone", slot: 36 },
-      entity: { position: { x: 0, y: 10, z: 0 } },
+      entity: { position: vec(0, 10, 0), eyeHeight: 1.62 },
       inventory: { items: () => [] },
       pathfinder: {
         setMovements: vi.fn(),
@@ -74,7 +82,7 @@ describe("MineflayerMovementService", () => {
         })
       },
       registry: { blocksByName: {}, blocksArray: [], itemsByName: {} },
-      blockAt: vi.fn(() => ({ name: "stone", diggable: true })),
+      blockAt: vi.fn(() => ({ name: "stone", diggable: true, position: vec(30, 10, 30) })),
       canDigBlock: vi.fn(() => false),
       dig: vi.fn()
     };
@@ -91,7 +99,7 @@ describe("MineflayerMovementService", () => {
     const supportBlock = { name: "stone", boundingBox: "block" };
     const bot: any = {
       heldItem: pickaxe,
-      entity: { position: { x: 0, y: 10, z: 0 } },
+      entity: { position: vec(0, 10, 0), eyeHeight: 1.62, yaw: 0, pitch: 0 },
       inventory: {
         items: () => [pickaxe, torch]
       },
@@ -104,9 +112,13 @@ describe("MineflayerMovementService", () => {
         if (position.y === 9) {
           return supportBlock;
         }
-        return { name: "gravel", diggable: true };
+        return { name: "gravel", diggable: true, position: vec(0, 10, 0) };
       }),
       canDigBlock: vi.fn(() => true),
+      look: vi.fn(async (yaw: number, pitch: number) => {
+        bot.entity.yaw = yaw;
+        bot.entity.pitch = pitch;
+      }),
       equip: vi.fn(async (item: any) => {
         actions.push(`equip:${item.name}`);
         bot.heldItem = item;
@@ -132,5 +144,25 @@ function logger(): any {
     warn: vi.fn(),
     error: vi.fn(),
     debug: vi.fn()
+  };
+}
+
+function vec(x: number, y: number, z: number): any {
+  return {
+    x,
+    y,
+    z,
+    offset(dx: number, dy: number, dz: number) {
+      return vec(x + dx, y + dy, z + dz);
+    },
+    minus(other: any) {
+      return vec(x - other.x, y - other.y, z - other.z);
+    },
+    distanceTo(other: any) {
+      const dx = x - other.x;
+      const dy = y - other.y;
+      const dz = z - other.z;
+      return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
   };
 }
