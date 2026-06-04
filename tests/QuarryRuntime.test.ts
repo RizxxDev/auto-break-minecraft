@@ -39,6 +39,7 @@ describe("QuarryRuntime", () => {
           goNear: vi.fn(),
           dig: vi.fn(async () => {
             actions.push("dig");
+            return true;
           })
         },
         safety: {

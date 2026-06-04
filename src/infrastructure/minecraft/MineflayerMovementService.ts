@@ -1,6 +1,7 @@
 import { PICKAXE_PRIORITY } from "../../domain/constants";
 import type { ILogger, IMovementService } from "../../domain/interfaces";
 import type { Vector3 } from "../../domain/types";
+import { getCarriedItems } from "../../services/InventoryService";
 import { floorVector } from "../../utils/vector";
 import { sleep } from "../../utils/sleep";
 import { patchBotDigTime } from "./enchantments";
@@ -43,6 +44,7 @@ export class MineflayerMovementService implements IMovementService {
   async goNear(position: Vector3, range = 1): Promise<void> {
     const pathfinderModule = require("mineflayer-pathfinder");
     const goal = new pathfinderModule.goals.GoalNear(position.x, position.y, position.z, range);
+    this.configurePathfinder();
     this.bot.pathfinder.setMovements(createSafeMovements(this.bot));
     const heldBeforePathing = this.bot.heldItem;
 
@@ -58,16 +60,30 @@ export class MineflayerMovementService implements IMovementService {
     }
   }
 
-  async dig(target: Vector3): Promise<void> {
-    await this.goNear(target, 2);
-
+  async dig(target: Vector3): Promise<boolean> {
     const block = this.bot.blockAt(toVec3(target));
     if (!block || !block.diggable) {
-      return;
+      return false;
     }
+
+    if (!this.canDigNow(block)) {
+      try {
+        await this.goNear(target, 2);
+      } catch (error) {
+        if (!this.canDigNow(block)) {
+          this.logger.warn("Skipping dig because pathfinder could not reach target", {
+            target,
+            error: error instanceof Error ? error.message : String(error)
+          });
+          return false;
+        }
+      }
+    }
+
     await this.equipBestPickaxeForDig();
     patchBotDigTime(this.bot);
     await this.bot.dig(block);
+    return true;
   }
 
   async returnTo(position: Vector3): Promise<void> {
@@ -155,7 +171,7 @@ export class MineflayerMovementService implements IMovementService {
   }
 
   private findBestPickaxe(): any | null {
-    const items = typeof this.bot.inventory?.items === "function" ? this.bot.inventory.items() : [];
+    const items = getCarriedItems(this.bot);
     const pickaxes = items.filter((item: any) => item.name?.endsWith("_pickaxe"));
     if (pickaxes.length === 0) {
       return null;
@@ -171,6 +187,29 @@ export class MineflayerMovementService implements IMovementService {
       const bRemaining = (b.maxDurability ?? 0) - (b.durabilityUsed ?? 0);
       return bRemaining - aRemaining;
     })[0];
+  }
+
+  private canDigNow(block: any): boolean {
+    if (typeof this.bot.canDigBlock === "function") {
+      return this.bot.canDigBlock(block);
+    }
+
+    const botPosition = this.bot.entity?.position;
+    const blockPosition = block.position ?? toVec3(block);
+    if (!botPosition || !blockPosition) {
+      return false;
+    }
+
+    return botPosition.distanceTo?.(blockPosition.offset?.(0.5, 0.5, 0.5) ?? blockPosition) <= 5.1;
+  }
+
+  private configurePathfinder(): void {
+    if (!this.bot.pathfinder) {
+      return;
+    }
+    this.bot.pathfinder.thinkTimeout = Math.max(this.bot.pathfinder.thinkTimeout ?? 0, 10_000);
+    this.bot.pathfinder.tickTimeout = Math.max(this.bot.pathfinder.tickTimeout ?? 0, 40);
+    this.bot.pathfinder.searchRadius = 48;
   }
 }
 

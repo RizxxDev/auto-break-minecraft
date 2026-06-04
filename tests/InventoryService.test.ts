@@ -20,6 +20,21 @@ describe("InventoryService", () => {
     expect(service.needsRepair(0.1)).toBe(true);
     expect(service.needsStorage(0.9)).toBe(true);
   });
+
+  it("detects a pickaxe carried in the off-hand slot", () => {
+    const bot = fakeBot([]);
+    bot.inventory.slots[45] = {
+      name: "diamond_pickaxe",
+      count: 1,
+      maxDurability: 100,
+      durabilityUsed: 20,
+      slot: 45
+    };
+    const service = new InventoryService(bot);
+
+    expect(service.getBestPickaxe()?.name).toBe("diamond_pickaxe");
+    expect(service.getPickaxeDurabilityPercent()).toBe(0.8);
+  });
 });
 
 function fakeBot(items: unknown[]): any {

@@ -23,6 +23,9 @@ export class MineflayerBotFactory {
     bot.loadPlugin(collectBlockModule.plugin ?? collectBlockModule);
 
     bot.once("spawn", () => {
+      bot.pathfinder.thinkTimeout = 10_000;
+      bot.pathfinder.tickTimeout = 40;
+      bot.pathfinder.searchRadius = 48;
       bot.pathfinder.setMovements(createSafeMovements(bot));
     });
 

@@ -1,7 +1,7 @@
 import type { ILogger, IToolService } from "../domain/interfaces";
 import type { ItemSnapshot } from "../domain/types";
 import { patchBotDigTime } from "../infrastructure/minecraft/enchantments";
-import { InventoryService } from "./InventoryService";
+import { getCarriedItems, InventoryService } from "./InventoryService";
 
 export class ToolService implements IToolService {
   constructor(
@@ -29,7 +29,6 @@ export class ToolService implements IToolService {
   }
 
   private findRawItem(snapshot: ItemSnapshot): any | null {
-    const items = typeof this.bot.inventory?.items === "function" ? this.bot.inventory.items() : [];
-    return items.find((item: any) => item.slot === snapshot.slot || item.name === snapshot.name) ?? null;
+    return getCarriedItems(this.bot).find((item: any) => item.slot === snapshot.slot || item.name === snapshot.name) ?? null;
   }
 }

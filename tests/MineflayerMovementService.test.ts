@@ -45,6 +45,7 @@ describe("MineflayerMovementService", () => {
         }
       },
       blockAt: vi.fn(() => ({ name: "stone", diggable: true })),
+      canDigBlock: vi.fn(() => true),
       equip: vi.fn(async (item: any) => {
         actions.push(`equip:${item.name}`);
         bot.heldItem = item;
@@ -56,9 +57,31 @@ describe("MineflayerMovementService", () => {
 
     const service = new MineflayerMovementService(bot, logger());
 
-    await service.dig({ x: 1, y: 10, z: 0 });
+    await expect(service.dig({ x: 1, y: 10, z: 0 })).resolves.toBe(true);
 
     expect(actions).toEqual(["equip:diamond_pickaxe", "dig:diamond_pickaxe"]);
+  });
+
+  it("returns false instead of throwing when pathfinder cannot reach a target", async () => {
+    const bot: any = {
+      heldItem: { name: "stone", slot: 36 },
+      entity: { position: { x: 0, y: 10, z: 0 } },
+      inventory: { items: () => [] },
+      pathfinder: {
+        setMovements: vi.fn(),
+        goto: vi.fn(async () => {
+          throw new Error("Took to long to decide path to goal!");
+        })
+      },
+      registry: { blocksByName: {}, blocksArray: [], itemsByName: {} },
+      blockAt: vi.fn(() => ({ name: "stone", diggable: true })),
+      canDigBlock: vi.fn(() => false),
+      dig: vi.fn()
+    };
+    const service = new MineflayerMovementService(bot, logger());
+
+    await expect(service.dig({ x: 30, y: 10, z: 30 })).resolves.toBe(false);
+    expect(bot.dig).not.toHaveBeenCalled();
   });
 });
 

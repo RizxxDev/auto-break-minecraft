@@ -6,8 +6,7 @@ export class InventoryService implements IInventoryService {
   constructor(private readonly bot: any) {}
 
   getItems(): ItemSnapshot[] {
-    const items = typeof this.bot.inventory?.items === "function" ? this.bot.inventory.items() : [];
-    return items.map(normalizeItem);
+    return getCarriedItems(this.bot).map(normalizeItem);
   }
 
   getInventoryUsage(): number {
@@ -60,6 +59,36 @@ export class InventoryService implements IInventoryService {
   needsFood(hunger: number, hungerLow: number): boolean {
     return hunger <= hungerLow && this.hasFood();
   }
+}
+
+export function getCarriedItems(bot: any): any[] {
+  const items: any[] = [];
+  const seen = new Set<string>();
+
+  const add = (item: any): void => {
+    if (!item?.name) {
+      return;
+    }
+    const key = `${item.slot ?? "no-slot"}:${item.name}:${item.type ?? ""}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    items.push(item);
+  };
+
+  if (typeof bot.inventory?.items === "function") {
+    for (const item of bot.inventory.items()) {
+      add(item);
+    }
+  }
+
+  for (const item of bot.inventory?.slots ?? []) {
+    add(item);
+  }
+
+  add(bot.heldItem);
+  return items;
 }
 
 export function normalizeItem(item: any): ItemSnapshot {

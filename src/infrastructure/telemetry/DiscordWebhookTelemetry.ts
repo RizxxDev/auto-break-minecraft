@@ -21,6 +21,7 @@ interface DiscordPayload {
 export class DiscordWebhookTelemetry implements ITelemetryService {
   private readonly queue: DiscordPayload[] = [];
   private retryTimer?: ReturnType<typeof setInterval>;
+  private rateLimitedUntil = 0;
 
   constructor(
     private readonly webhookUrl: string | undefined,
@@ -140,11 +141,21 @@ export class DiscordWebhookTelemetry implements ITelemetryService {
       return;
     }
 
+    if (Date.now() < this.rateLimitedUntil) {
+      this.queuePayload(payload);
+      this.logger.warn("Discord webhook rate limited; queued for later", {
+        retryInMs: this.rateLimitedUntil - Date.now(),
+        queueLength: this.queue.length
+      });
+      return;
+    }
+
     try {
       await postWebhook(this.webhookUrl, payload);
     } catch (error) {
+      this.rememberRateLimit(error);
       this.logger.warn("Discord webhook failed; queued for retry", { error: normalizeError(error).message });
-      this.queue.push(payload);
+      this.queuePayload(payload);
     }
   }
 
@@ -155,12 +166,31 @@ export class DiscordWebhookTelemetry implements ITelemetryService {
 
     const pending = this.queue.splice(0, this.queue.length);
     for (const payload of pending) {
+      if (Date.now() < this.rateLimitedUntil) {
+        this.queuePayload(payload);
+        return;
+      }
+
       try {
         await postWebhook(this.webhookUrl, payload);
       } catch (error) {
+        this.rememberRateLimit(error);
         this.logger.warn("Discord webhook retry failed", { error: normalizeError(error).message });
-        this.queue.push(payload);
+        this.queuePayload(payload);
       }
+    }
+  }
+
+  private queuePayload(payload: DiscordPayload): void {
+    this.queue.push(payload);
+    if (this.queue.length > 50) {
+      this.queue.splice(0, this.queue.length - 50);
+    }
+  }
+
+  private rememberRateLimit(error: unknown): void {
+    if (error instanceof WebhookHttpError && error.status === 429) {
+      this.rateLimitedUntil = Date.now() + Math.max(error.retryAfterMs ?? 30_000, 15_000);
     }
   }
 }
@@ -173,7 +203,18 @@ async function postWebhook(webhookUrl: string, payload: DiscordPayload): Promise
   });
 
   if (!response.ok) {
-    throw new Error(`Discord webhook HTTP ${response.status}`);
+    const retryAfterHeader = response.headers?.get("retry-after");
+    const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : undefined;
+    throw new WebhookHttpError(response.status, retryAfterMs);
+  }
+}
+
+class WebhookHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly retryAfterMs?: number
+  ) {
+    super(`Discord webhook HTTP ${status}`);
   }
 }
 

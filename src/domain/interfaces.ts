@@ -52,7 +52,7 @@ export interface IMovementService {
   getLastKnownPath(): Vector3[];
   canReach(position: Vector3, range?: number): Promise<boolean>;
   goNear(position: Vector3, range?: number): Promise<void>;
-  dig(target: Vector3): Promise<void>;
+  dig(target: Vector3): Promise<boolean>;
   returnTo(position: Vector3): Promise<void>;
 }
 

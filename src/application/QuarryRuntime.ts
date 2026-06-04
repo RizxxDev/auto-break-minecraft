@@ -21,7 +21,7 @@ interface RuntimeServices {
     getPosition(): Vector3;
     getLastKnownPath(): Vector3[];
     goNear(position: Vector3, range?: number): Promise<void>;
-    dig(target: Vector3): Promise<void>;
+    dig(target: Vector3): Promise<boolean>;
   };
   safety: ISafetyService;
   inventory: {
@@ -159,7 +159,11 @@ export class QuarryRuntime {
     }
 
     await this.services.tools.equipBestPickaxe();
-    await this.services.movement.dig(target);
+    const mined = await this.services.movement.dig(target);
+    if (!mined) {
+      this.services.logger.warn("Skipping target because it could not be mined", { target });
+      return;
+    }
     this.state = this.services.planner.recordMined(this.state, target);
     if (this.services.planner.getTargetRole(this.state, target) === "FEET") {
       await this.services.movement.goNear(target, 1);
